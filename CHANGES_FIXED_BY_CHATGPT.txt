@@ -1,0 +1,11 @@
+Fixed requested issues:
+1. Replaced real business address/map details with fake demo details:
+   123 Sugar Street, Winnipeg, Manitoba R3C 0A1
+   (204) 555-0188
+   hello@sugarnestcookies.test
+2. Changed top website brand from Happy's Cookiez to SugarNest Cookie Co.
+3. Homepage now only displays 3 cookies by slicing featured products.
+4. Add to Cart no longer depends on Shopify variant IDs; it uses a local demo cart so every cookie can be added.
+5. Checkout now goes to /checkout and shows a fake demo order-complete page; no Shopify checkout connection.
+
+Important: Run backend and frontend in two terminals as before.

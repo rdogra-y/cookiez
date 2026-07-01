@@ -1,0 +1,414 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ── ENUMS ────────────────────────────────────────────
+
+enum Role {
+  SUPER_ADMIN
+  BAKERY_MANAGER
+  STAFF
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAUSED
+  CANCELLED
+  EXPIRED
+}
+
+enum SubscriptionFrequency {
+  WEEKLY
+  BIWEEKLY
+  MONTHLY
+}
+
+enum DeliveryDay {
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+  SUNDAY
+}
+
+enum PromoType {
+  QR_CAMPAIGN
+  DISCOUNT_CODE
+  FOMO_DROP
+  BUNDLE
+}
+
+enum PromoStatus {
+  ACTIVE
+  SCHEDULED
+  EXPIRED
+  PAUSED
+}
+
+enum DropStatus {
+  UPCOMING
+  LIVE
+  SOLD_OUT
+  ENDED
+}
+
+enum ReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  FLAGGED
+}
+
+enum CorporateOrderStatus {
+  INQUIRY
+  QUOTED
+  CONFIRMED
+  BAKING
+  DELIVERED
+  CANCELLED
+}
+
+// ── ADMIN USERS ──────────────────────────────────────
+
+model AdminUser {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String
+  name         String
+  role         Role      @default(STAFF)
+  isActive     Boolean   @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  createdPromos   PromoCampaign[]
+  createdDrops    CookieDrop[]
+  approvedReviews Review[]        @relation("ReviewApprovedBy")
+
+  @@map("admin_users")
+}
+
+// ── PRODUCTS (Shopify mirror) ────────────────────────
+
+model Product {
+  id               String   @id @default(cuid())
+  shopifyProductId String   @unique
+  shopifyHandle    String   @unique
+  title            String
+  description      String?
+  price            Decimal  @db.Decimal(10, 2)
+  compareAtPrice   Decimal? @db.Decimal(10, 2)
+  imageUrl         String?
+  isAvailable      Boolean  @default(true)
+  isFeatured       Boolean  @default(false)
+  isLimitedEdition Boolean  @default(false)
+  isCultureDrop    Boolean  @default(false)
+  cultureOrigin    String?
+  descriptor       String?
+  hook             String?
+  story            String?
+  storageHint      String?
+  tags             String[]
+  ingredients      String?
+  allergens        String[]
+  calories         Int?
+  inventoryQty     Int      @default(0)
+  lowStockThreshold Int     @default(10)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  reviews      Review[]
+  dropProducts CookieDropProduct[]
+
+  @@map("products")
+}
+
+// ── COOKIE DROPS (FOMO) ──────────────────────────────
+
+model CookieDrop {
+  id            String     @id @default(cuid())
+  title         String
+  description   String?
+  status        DropStatus @default(UPCOMING)
+  startsAt      DateTime
+  endsAt        DateTime
+  offerText     String?
+  offerPrice    Decimal    @db.Decimal(10, 2)
+  originalPrice Decimal    @db.Decimal(10, 2)
+  maxQuantity   Int?
+  soldCount     Int        @default(0)
+  urgencyText   String?
+  createdById   String?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  createdBy  AdminUser?          @relation(fields: [createdById], references: [id])
+  products   CookieDropProduct[]
+  promoCodes PromoCode[]
+
+  @@map("cookie_drops")
+}
+
+model CookieDropProduct {
+  id        String     @id @default(cuid())
+  dropId    String
+  productId String
+  quantity  Int        @default(1)
+
+  drop    CookieDrop @relation(fields: [dropId], references: [id], onDelete: Cascade)
+  product Product    @relation(fields: [productId], references: [id])
+
+  @@unique([dropId, productId])
+  @@map("cookie_drop_products")
+}
+
+// ── PROMO CAMPAIGNS ──────────────────────────────────
+
+model PromoCampaign {
+  id            String      @id @default(cuid())
+  name          String
+  description   String?
+  type          PromoType
+  status        PromoStatus @default(ACTIVE)
+  discountPct   Decimal?    @db.Decimal(5, 2)
+  discountFixed Decimal?    @db.Decimal(10, 2)
+  freeItemCount Int?
+  startsAt      DateTime?
+  expiresAt     DateTime?
+  maxUses       Int?
+  usedCount     Int         @default(0)
+  qrCodeUrl     String?
+  landingSlug   String?     @unique
+  createdById   String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  createdBy   AdminUser?        @relation(fields: [createdById], references: [id])
+  codes       PromoCode[]
+  redemptions PromoRedemption[]
+
+  @@map("promo_campaigns")
+}
+
+model PromoCode {
+  id         String    @id @default(cuid())
+  campaignId String
+  dropId     String?
+  code       String    @unique
+  isActive   Boolean   @default(true)
+  maxUses    Int       @default(1)
+  usedCount  Int       @default(0)
+  expiresAt  DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  campaign    PromoCampaign     @relation(fields: [campaignId], references: [id])
+  drop        CookieDrop?       @relation(fields: [dropId], references: [id])
+  redemptions PromoRedemption[]
+
+  @@map("promo_codes")
+}
+
+model PromoRedemption {
+  id             String   @id @default(cuid())
+  campaignId     String
+  codeId         String?
+  customerEmail  String
+  customerName   String?
+  shopifyOrderId String?
+  discountAmount Decimal? @db.Decimal(10, 2)
+  redeemedAt     DateTime @default(now())
+
+  campaign PromoCampaign @relation(fields: [campaignId], references: [id])
+  code     PromoCode?    @relation(fields: [codeId], references: [id])
+
+  @@map("promo_redemptions")
+}
+
+// ── SUBSCRIPTIONS ─────────────────────────────────────
+
+model SubscriberPlan {
+  id           String                  @id @default(cuid())
+  name         String
+  description  String?
+  isActive     Boolean                 @default(true)
+  cookieCount  Int
+  pricePerBox  Decimal                 @db.Decimal(10, 2)
+  comparePrice Decimal?                @db.Decimal(10, 2)
+  savingsPct   Int?
+  frequencies  SubscriptionFrequency[]
+  deliveryDays DeliveryDay[]
+  perks        String[]
+  badgeText    String?
+  createdAt    DateTime                @default(now())
+  updatedAt    DateTime                @updatedAt
+
+  leads SubscriberLead[]
+
+  @@map("subscriber_plans")
+}
+
+model SubscriberLead {
+  id              String                @id @default(cuid())
+  planId          String
+  status          SubscriptionStatus    @default(ACTIVE)
+  email           String
+  name            String?
+  phone           String?
+  frequency       SubscriptionFrequency
+  deliveryDay     DeliveryDay
+  quantity        Int
+  shopifyOrderId  String?
+  nextDeliveryAt  DateTime?
+  lastDeliveredAt DateTime?
+  totalDeliveries Int                   @default(0)
+  loyaltyPoints   Int                   @default(0)
+  addressLine1    String?
+  addressLine2    String?
+  city            String?
+  province        String?
+  postalCode      String?
+  country         String?               @default("CA")
+  pausedUntil     DateTime?
+  cancelledAt     DateTime?
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  plan            SubscriberPlan         @relation(fields: [planId], references: [id])
+  deliveryHistory SubscriptionDelivery[]
+
+  @@map("subscriber_leads")
+}
+
+model SubscriptionDelivery {
+  id             String   @id @default(cuid())
+  subscriberId   String
+  deliveredAt    DateTime @default(now())
+  shopifyOrderId String?
+  amount         Decimal  @db.Decimal(10, 2)
+  cookieCount    Int
+
+  subscriber SubscriberLead @relation(fields: [subscriberId], references: [id], onDelete: Cascade)
+
+  @@map("subscription_deliveries")
+}
+
+// ── CORPORATE ─────────────────────────────────────────
+
+model CorporateAccount {
+  id          String   @id @default(cuid())
+  companyName String
+  contactName String
+  email       String   @unique
+  phone       String?
+  city        String?
+  province    String?
+  postalCode  String?
+  isActive    Boolean  @default(true)
+  discountPct Decimal? @db.Decimal(5, 2)
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  orders CorporateOrder[]
+
+  @@map("corporate_accounts")
+}
+
+model CorporateOrder {
+  id              String               @id @default(cuid())
+  accountId       String
+  status          CorporateOrderStatus @default(INQUIRY)
+  cookieCount     Int
+  customPackaging Boolean              @default(false)
+  quotedPrice     Decimal?             @db.Decimal(10, 2)
+  finalPrice      Decimal?             @db.Decimal(10, 2)
+  deliveryDate    DateTime?
+  deliveryAddress String?
+  isRecurring     Boolean              @default(false)
+  shopifyOrderId  String?
+  internalNotes   String?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  account CorporateAccount @relation(fields: [accountId], references: [id])
+
+  @@map("corporate_orders")
+}
+
+// ── REVIEWS ───────────────────────────────────────────
+
+model Review {
+  id              String       @id @default(cuid())
+  productId       String?
+  status          ReviewStatus @default(PENDING)
+  reviewerName    String
+  reviewerEmail   String?
+  isVerifiedBuyer Boolean      @default(false)
+  rating          Int
+  title           String?
+  body            String
+  isFeatured      Boolean      @default(false)
+  featuredOrder   Int?
+  approvedById    String?
+  approvedAt      DateTime?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  product    Product?   @relation(fields: [productId], references: [id])
+  approvedBy AdminUser? @relation("ReviewApprovedBy", fields: [approvedById], references: [id])
+
+  @@map("reviews")
+}
+
+// ── SITE SETTINGS ─────────────────────────────────────
+
+model SiteSetting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String
+  label     String?
+  group     String?
+  isPublic  Boolean  @default(false)
+  updatedAt DateTime @updatedAt
+
+  @@map("site_settings")
+}
+
+// ── EMAIL SUBSCRIBERS ─────────────────────────────────
+
+model EmailSubscriber {
+  id             String    @id @default(cuid())
+  email          String    @unique
+  name           String?
+  source         String?
+  isActive       Boolean   @default(true)
+  confirmedAt    DateTime?
+  unsubscribedAt DateTime?
+  createdAt      DateTime  @default(now())
+
+  @@map("email_subscribers")
+}
+
+// ── ANALYTICS ─────────────────────────────────────────
+
+model ConversionEvent {
+  id            String   @id @default(cuid())
+  eventType     String
+  sessionId     String?
+  customerEmail String?
+  productId     String?
+  value         Decimal? @db.Decimal(10, 2)
+  metadata      Json?
+  createdAt     DateTime @default(now())
+
+  @@index([eventType])
+  @@index([createdAt])
+  @@map("conversion_events")
+}

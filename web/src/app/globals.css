@@ -1,0 +1,31 @@
+@import "tailwindcss";
+
+:root {
+  --cream: #FAF6F1;
+  --brown: #3B1F0E;
+  --caramel: #C4622D;
+  --warm: #E8D5C4;
+  --gold: #D4A853;
+  --muted: #8B5E3C;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: var(--cream);
+  color: var(--brown);
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4 {
+  line-height: 1.2;
+}
